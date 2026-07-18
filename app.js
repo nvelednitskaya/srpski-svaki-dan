@@ -67,15 +67,117 @@ function renderCategory(id) {
         <svg viewBox="0 0 24 24" ${S}><path d="M14 6l-6 6 6 6"/></svg>
       </a>
       <h1 class="cat-title">${c.title}</h1>
+      <a class="learn-btn" href="#/learn/${c.id}">Учить</a>
     </div>
     <div class="phrases">${cards}</div>`;
   document.title = c.title + ' — Сербский на каждый день';
 }
 
+/* ---------- Режим обучения ---------- */
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let QUIZ = null;
+
+function startQuiz(catId) {
+  const c = DATA.categories.find(x => x.id === catId);
+  if (!c) { location.hash = '#/'; return; }
+  QUIZ = { cat: c, order: shuffle(c.items), index: 0, correct: 0 };
+  renderQuestion();
+}
+
+function buildOptions(item, cat) {
+  const norm = (s) => s.trim().toLowerCase();
+  const seen = new Set([norm(item.sr)]);
+  const pool = shuffle(cat.items.filter((x) => {
+    if (x === item || seen.has(norm(x.sr))) return false;
+    seen.add(norm(x.sr));
+    return true;
+  }));
+  return shuffle([item, ...pool.slice(0, 2)]);
+}
+
+function renderQuestion() {
+  const q = QUIZ;
+  const item = q.order[q.index];
+  const options = buildOptions(item, q.cat);
+  const buttons = options.map((o, i) => `
+    <button class="opt" type="button" data-i="${i}">${o.sr}</button>`).join('');
+  view.innerHTML = `
+    <div class="cat-header">
+      <a class="back" href="#/cat/${q.cat.id}" aria-label="Выйти из обучения">
+        <svg viewBox="0 0 24 24" ${S}><path d="M14 6l-6 6 6 6"/></svg>
+      </a>
+      <h1 class="cat-title">${q.cat.title}</h1>
+      <span class="quiz-progress">${q.index + 1} / ${q.order.length}</span>
+    </div>
+    <p class="quiz-ask">Как перевести:</p>
+    <p class="quiz-question">${item.ru}</p>
+    <div class="quiz-options">${buttons}</div>
+    <p class="quiz-tr" hidden>${item.tr}</p>
+    <div class="quiz-footer" hidden>
+      <button class="quiz-next" type="button">${q.index + 1 < q.order.length ? 'Далее' : 'Результат'}</button>
+    </div>`;
+  document.title = q.cat.title + ' — обучение';
+
+  const optEls = view.querySelectorAll('.opt');
+  optEls.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const chosen = options[Number(btn.dataset.i)];
+      const ok = chosen === item;
+      if (ok) q.correct++;
+      optEls.forEach((b) => {
+        b.disabled = true;
+        const o = options[Number(b.dataset.i)];
+        if (o === item) b.classList.add('is-correct');
+        else if (b === btn) b.classList.add('is-wrong');
+        else b.classList.add('is-muted');
+      });
+      view.querySelector('.quiz-tr').hidden = false;
+      view.querySelector('.quiz-footer').hidden = false;
+      view.querySelector('.quiz-next').focus();
+    });
+  });
+
+  view.querySelector('.quiz-next').addEventListener('click', () => {
+    q.index++;
+    if (q.index < q.order.length) { renderQuestion(); window.scrollTo(0, 0); }
+    else renderResult();
+  });
+}
+
+function renderResult() {
+  const q = QUIZ;
+  const n = q.order.length;
+  const all = q.correct === n;
+  view.innerHTML = `
+    <div class="quiz-result">
+      <p class="quiz-score">${q.correct} / ${n}</p>
+      <p class="quiz-score-label">${all ? 'Всё верно, отлично!' : 'правильных ответов'}</p>
+      <p class="quiz-again-ask">Хотите повторить изучение раздела?</p>
+      <div class="quiz-result-actions">
+        <button class="quiz-next" type="button" id="quiz-repeat">Повторить</button>
+        <a class="quiz-exit" href="#/cat/${q.cat.id}">К разделу</a>
+      </div>
+    </div>`;
+  document.getElementById('quiz-repeat').addEventListener('click', () => startQuiz(q.cat.id));
+  window.scrollTo(0, 0);
+}
+
 function route() {
+  const mLearn = location.hash.match(/^#\/learn\/(.+)$/);
   const m = location.hash.match(/^#\/cat\/(.+)$/);
-  if (m && DATA) renderCategory(decodeURIComponent(m[1]));
-  else if (DATA) renderHome();
+  if (!DATA) return;
+  if (mLearn) startQuiz(decodeURIComponent(mLearn[1]));
+  else if (m) renderCategory(decodeURIComponent(m[1]));
+  else renderHome();
   window.scrollTo(0, 0);
 }
 

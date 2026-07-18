@@ -1,4 +1,4 @@
-const CACHE = 'srpski-v1';
+const CACHE = 'srpski-v2';
 const ASSETS = [
   './',
   './index.html',
